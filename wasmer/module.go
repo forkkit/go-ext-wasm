@@ -192,6 +192,42 @@ func (module *Module) InstantiateWithImports(imports *Imports) (Instance, error)
 	)
 }
 
+// InstantiateWithImportObject creates a new instance of a WebAssembly module with an
+// `ImportObject`
+func (module *Module) InstantiateWithImportObject(importObject *ImportObject) (Instance, error) {
+	var instance *cWasmerInstanceT
+	var emptyInstance = Instance{instance: nil, imports: nil, Exports: nil, Memory: nil}
+
+	var instantiateResult = cWasmerModuleImportInstantiate(&instance, module.module, importObject.inner)
+
+	if instantiateResult != cWasmerOk {
+		var lastError, err = GetLastError()
+		var errorMessage = "Failed to instantiate the module:\n    %s"
+
+		if err != nil {
+			errorMessage = fmt.Sprintf(errorMessage, "(unknown details)")
+		} else {
+			errorMessage = fmt.Sprintf(errorMessage, lastError)
+		}
+
+		return emptyInstance, NewModuleError(errorMessage)
+	}
+
+	exports, memoryPointer, err := getExportsFromInstance(instance)
+
+	if err != nil {
+		return emptyInstance, err
+	}
+
+	imports, err := importObject.Imports()
+
+	if err != nil {
+		return emptyInstance, NewModuleError(fmt.Sprintf("Could not get imports from ImportObject: %s", err))
+	}
+
+	return Instance{instance: instance, imports: imports, Exports: exports, Memory: memoryPointer}, nil
+}
+
 // Serialize serializes the current module into a sequence of
 // bytes. Those bytes can be deserialized into a module with
 // `DeserializeModule`.
